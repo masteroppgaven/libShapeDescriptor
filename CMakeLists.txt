@@ -36,6 +36,7 @@ include_directories (
         lib/glm/
         lib/lodepng/
 		lib/arrrgh/
+		lib/cmake-repo-info/
 		lib/json/
 		lib/fast-lzma2/src/
 		lib/
@@ -61,6 +62,13 @@ file (GLOB_RECURSE QUICCI_DUMPER_TOOL_SOURCES  tools/quiccidumper/*.cpp)
 file (GLOB_RECURSE QUICCI_VIEWER_TOOL_SOURCES  tools/quicciviewer/*.cpp)
 file (GLOB_RECURSE BENCHMARK 				   tools/benchmarking/*.cpp)
 file (GLOB_RECURSE BENCHMARK_HEADERS 		   tools/benchmarking/*.h)
+
+set(PRE_CONFIGURE_FILE "lib/cmake-repo-info/git.cc.in")
+set(POST_CONFIGURE_FILE "${CMAKE_CURRENT_BINARY_DIR}/git.cc")
+include(lib/cmake-repo-info/git_watcher.cmake)
+add_library(gitinfo STATIC ${POST_CONFIGURE_FILE})
+target_include_directories(gitinfo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_dependencies(gitinfo check_git)
 
 if (CMAKE_CUDA_COMPILER)
 	add_library(${PROJECT_NAME} STATIC ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} ${LIBRARY_KERNELS})

@@ -101,10 +101,10 @@ descriptorType generateDescriptorsForObject(ShapeDescriptor::cpu::Mesh mesh,
                                             std::chrono::duration<double> &elapsedTime,
                                             float supportRadius = 0.5f,
                                             float supportAngleDegress = 10.0f,
-                                            float pointDensityRadius = 0.4f,
-                                            float minSupportRadius = 0.2f,
-                                            float maxSupportRadius = 1.0f,
-                                            size_t pointCloudSampleCount = 100000,
+                                            float pointDensityRadius = 0.05f,
+                                            float minSupportRadius = 0.4f,
+                                            float maxSupportRadius = 0.6f,
+                                            size_t pointCloudSampleCount = 200000,
                                             size_t randomSeed = 133713375318008)
 {
     descriptorType descriptor;
@@ -235,16 +235,7 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                     comparisonObjectPath = comparisonFolder + "/" + fileName + ".obj";
 
                     meshOriginal = ShapeDescriptor::utilities::loadMesh(originalObjectPath);
-
-                    // Our GoogleDataset objects do not include any normals
-                    if (comparisonFolderName == "GoogleDataset")
-                    {
-                        meshComparison = ShapeDescriptor::utilities::loadMesh(comparisonObjectPath, true);
-                    }
-                    else
-                    {
-                        meshComparison = ShapeDescriptor::utilities::loadMesh(comparisonObjectPath);
-                    }
+                    meshComparison = ShapeDescriptor::utilities::loadMesh(comparisonObjectPath);
 
                     metadata = prepareMetadata(comparisonFolder + "/" + fileName + ".txt", meshOriginal.vertexCount);
                 }
@@ -460,44 +451,98 @@ int main(int argc, const char **argv)
     GPUInfo.memory = device_information.totalGlobalMem / (1024 * 1024);
 #endif
 
-    if (originalObject.value() != "" && comparisonObject.value() != "")
+    if (originalObject.value() != "" || comparisonObject.value() != "")
     {
         int timeStart = std::time(0);
-        std::filesystem::path objectOne = originalObject.value();
-        std::filesystem::path objectTwo = comparisonObject.value();
 
-        ShapeDescriptor::cpu::Mesh meshOne = ShapeDescriptor::utilities::loadMesh(objectOne);
-        ShapeDescriptor::cpu::Mesh meshTwo = ShapeDescriptor::utilities::loadMesh(objectTwo, true);
+        std::string csvOutput = "object,descriptor,supportRadius,similarity,tdOne,tdTwo,tSim\n";
 
-        std::vector<std::variant<int, std::string>> metadata;
+        std::string recalculatedPath = "/mnt/VOID/projects/shape_descriptors_benchmark/Dataset/RecalculatedNormals/0-100/";
+        std::string overlappingPath = "/mnt/VOID/projects/shape_descriptors_benchmark/Dataset/OverlappingObjects/25.1-35.0/";
 
-        if (metadataPath.value() == "")
+        int objectsToTest = 100;
+
+        float supportRadiuses[9] = {0.05, 0.1, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0, 50.0};
+
+        for (int object = 0; object < objectsToTest; object++)
         {
-            metadata = prepareMetadata("", meshOne.vertexCount);
+            std::cout << "Testing object " << object << std::endl;
+            std::string objectStr = std::to_string(object);
+            std::string objectName = std::string(4 - objectStr.length(), '0') + objectStr;
+
+            std::string metadataFile = overlappingPath + objectName + "/" + objectName + ".txt";
+            std::vector<std::variant<int, std::string>> metadata = prepareMetadata(metadataFile);
+
+            std::filesystem::path objectOne = recalculatedPath + objectName + "/" + objectName + ".obj";
+            std::filesystem::path objectTwo = overlappingPath + objectName + "/" + objectName + ".obj";
+
+            ShapeDescriptor::cpu::Mesh meshOne = ShapeDescriptor::utilities::loadMesh(objectOne, true);
+            ShapeDescriptor::cpu::Mesh meshTwo = ShapeDescriptor::utilities::loadMesh(objectTwo, true);
+            for (auto a : descriptorAlgorithms)
+            {
+                for (float supportRadius : supportRadiuses)
+                {
+                    std::chrono::duration<double> elapsedTimeOne;
+                    std::chrono::duration<double> elapsedTimeTwo;
+
+                    std::chrono::steady_clock::time_point distanceTimeStart;
+                    std::chrono::steady_clock::time_point distanceTimeEnd;
+
+                    std::cout << a.second << " with support radius " << supportRadius << std::endl;
+
+                    descriptorType descriptorOne = generateDescriptorsForObject(meshOne, a.first, hardware.value(), elapsedTimeOne, supportRadius, 10.0f, 0.05f, supportRadius - 0.02f, supportRadius + 0.02f);
+                    descriptorType descriptorTwo = generateDescriptorsForObject(meshTwo, a.first, hardware.value(), elapsedTimeTwo, supportRadius, 10.0f, 0.05f, supportRadius - 0.02f, supportRadius + 0.02f);
+
+                    double similarity;
+
+                    distanceTimeStart = std::chrono::steady_clock::now();
+
+                    switch (a.first)
+                    {
+                    case 0:
+                    {
+                        similarity = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(std::get<0>(descriptorOne), std::get<0>(descriptorTwo), metadata, 1, true);
+                        break;
+                    }
+                    case 1:
+                    {
+                        similarity = calculateSimilarity<ShapeDescriptor::QUICCIDescriptor>(std::get<1>(descriptorOne), std::get<1>(descriptorTwo), metadata, 1, true);
+                        break;
+                    }
+                    case 2:
+                    {
+                        similarity = calculateSimilarity<ShapeDescriptor::SpinImageDescriptor>(std::get<2>(descriptorOne), std::get<2>(descriptorTwo), metadata, 1, true);
+                        break;
+                    }
+                    case 3:
+                    {
+                        similarity = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(std::get<3>(descriptorOne), std::get<3>(descriptorTwo), metadata, 1, true);
+                        break;
+                    }
+                    case 4:
+                    {
+                        similarity = calculateSimilarity<ShapeDescriptor::FPFHDescriptor>(std::get<4>(descriptorOne), std::get<4>(descriptorTwo), metadata, 1, true);
+                        break;
+                    }
+                    }
+
+                    distanceTimeEnd = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> distanceTime = distanceTimeEnd - distanceTimeStart;
+
+                    std::string outputString = objectName + "," + a.second + "," + std::to_string(supportRadius) + "," + std::to_string(similarity) + "," + std::to_string(elapsedTimeOne.count()) + "," + std::to_string(elapsedTimeTwo.count()) + "," + std::to_string(distanceTime.count()) + "\n";
+                    csvOutput += outputString;
+
+                    std::cout << outputString << std::endl;
+                }
+            }
+            ShapeDescriptor::free::mesh(meshOne);
+            ShapeDescriptor::free::mesh(meshTwo);
         }
-        else
-        {
-            metadata = prepareMetadata(metadataPath.value());
-        }
 
-        std::chrono::duration<double> elapsedTimeOne;
-        std::chrono::duration<double> elapsedTimeTwo;
-
-        descriptorType descriptorOne = generateDescriptorsForObject(meshOne, 3, hardware.value(), elapsedTimeOne);
-        descriptorType descriptorTwo = generateDescriptorsForObject(meshTwo, 3, hardware.value(), elapsedTimeTwo);
-
-        std::cout << "d One length: " << std::get<3>(descriptorOne).length << std::endl;
-        std::cout << "Mesh One vertex count: " << meshOne.vertexCount << std::endl;
-
-        double similarity = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(std::get<3>(descriptorOne), std::get<3>(descriptorTwo), metadata, 1, true);
-
-        std::cout << "Similarity: " << similarity << std::endl;
-
-        // std::cout << "Time (descriptor one): " << elapsedTimeOne.count() << std::endl;
-        // std::cout << "Time (descriptor two): " << elapsedTimeTwo.count() << std::endl;
-
-        ShapeDescriptor::free::mesh(meshOne);
-        ShapeDescriptor::free::mesh(meshTwo);
+        std::string outputFolder = "/mnt/VOID/projects/shape_descriptors_benchmark/Output/supportRadiusTest";
+        std::ofstream out(outputFolder + "/supportRadiusTest.csv");
+        out << csvOutput;
+        out.close();
     }
     else if (objectsFolder.value() != "" && originalsFolderName.value() != "" && (originalObject.value() == "" && comparisonObject.value() == ""))
     {
