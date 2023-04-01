@@ -601,91 +601,40 @@ int main(int argc, const char **argv)
     GPUInfo.memory = device_information.totalGlobalMem / (1024 * 1024);
 #endif
 
-    if (originalObject.value() != "")
+    if (originalObject.value() != "" && comparisonObject.value() != "")
     {
-        json spinImageTest;
+        std::cout << "runDate " << getRunDate() << std::endl;
 
-        int numberOfObjects = 1000;
-        std::string originalObjectsPath = "/mnt/VOID/projects/shape_descriptors_benchmark/Dataset/NewRecalculatedNormals/0-100/";
-        std::string comparisonObjectsPath = "/mnt/VOID/projects/shape_descriptors_benchmark/Dataset/OverlappingObjects/15.1-25.0/";
+        int timeStart = std::time(0);
+        std::filesystem::path objectOne = originalObject.value();
+        std::filesystem::path objectTwo = comparisonObject.value();
 
-        std::string outPath = "/mnt/VOID/projects/shape_descriptors_benchmark/Output/spinImageDistancetest";
-        std::filesystem::create_directory(outPath);
+        ShapeDescriptor::cpu::Mesh meshOne = ShapeDescriptor::utilities::loadMesh(objectOne);
+        ShapeDescriptor::cpu::Mesh meshTwo = ShapeDescriptor::utilities::loadMesh(objectTwo);
 
-        std::string output = "dataset,object,descriptor,category,distanceFunction,similarity,time\n";
+        std::vector<std::variant<int, std::string>> metadata;
 
-        for (int objectNumber = 0; objectNumber < numberOfObjects; objectNumber++)
+        if (metadataPath.value() == "")
         {
-            std::cout << "Testing object " << objectNumber << std::endl;
-
-            std::string objectStr = std::to_string(objectNumber);
-            std::string objectName = std::string(4 - objectStr.length(), '0') + objectStr;
-
-            std::string metadataFile = comparisonObjectsPath + objectName + "/" + objectName + ".txt";
-            std::vector<std::variant<int, std::string>> metadata = Benchmarking::utilities::metadata::prepareMetadata(metadataFile);
-
-            std::filesystem::path objectOne = originalObjectsPath + objectName + "/" + objectName + ".obj";
-            std::filesystem::path objectTwo = comparisonObjectsPath + objectName + "/" + objectName + ".obj";
-
-            ShapeDescriptor::cpu::Mesh meshOne = ShapeDescriptor::utilities::loadMesh(objectOne);
-            ShapeDescriptor::cpu::Mesh meshTwo = ShapeDescriptor::utilities::loadMesh(objectTwo);
-
-            std::chrono::duration<double> elapsedTimeOne;
-            std::chrono::duration<double> elapsedTimeTwo;
-
-            ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> descriptorOne =
-                std::get<2>(generateDescriptorsForObject(meshOne, 2, hardware.value(), elapsedTimeOne));
-            ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> descriptorTwo =
-                std::get<2>(generateDescriptorsForObject(meshTwo, 2, hardware.value(), elapsedTimeTwo));
-
-            std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor>>
-                transformedDescriptors = Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(descriptorOne, descriptorTwo, metadata);
-
-            ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> transformedOriginal = transformedDescriptors.at(0);
-            ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> transformedComparison = transformedDescriptors.at(1);
-
-            ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> descriptorOneGPU = transformedOriginal.copyToGPU();
-            ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> descriptorTwoGPU = transformedComparison.copyToGPU();
-
-            std::chrono::steady_clock::time_point cosineTimeStart = std::chrono::steady_clock::now();
-            ShapeDescriptor::cpu::array<float> similaritesCosine =
-                ShapeDescriptor::gpu::computeSIElementWiseCosineSimilarity(descriptorOneGPU, descriptorTwoGPU);
-            float cosineSim = calculateAverageSimilarity(similaritesCosine);
-            std::chrono::steady_clock::time_point cosineTimeEnd = std::chrono::steady_clock::now();
-
-            std::chrono::duration<double> cosineTime = cosineTimeEnd - cosineTimeStart;
-
-            std::chrono::steady_clock::time_point pearsonTimeStart = std::chrono::steady_clock::now();
-            ShapeDescriptor::cpu::array<float> distancesPearson =
-                ShapeDescriptor::gpu::computeSIElementWisePearsonCorrelations(descriptorOneGPU, descriptorTwoGPU);
-            float pearsonSim = calculateAverageSimilarity(distancesPearson);
-            std::chrono::steady_clock::time_point pearsonTimeEnd = std::chrono::steady_clock::now();
-
-            std::chrono::duration<double> pearsonTime = pearsonTimeEnd - pearsonTimeStart;
-
-            std::cout << "Cosine similarity: " << cosineSim << std::endl;
-            std::cout << "Pearson similarity: " << pearsonSim << std::endl;
-
-            output += "OverlappingObjects," + objectName + ",SI,15.1-25.0,Cosine," + std::to_string(cosineSim) + "," + std::to_string(cosineTime.count()) + "\n";
-            output += "OverlappingObjects," + objectName + ",SI,15.1-25.0,Pearson," + std::to_string(pearsonSim) + "," + std::to_string(pearsonTime.count()) + "\n";
-
-            metadata.clear();
-
-            ShapeDescriptor::free::array(similaritesCosine);
-            ShapeDescriptor::free::array(distancesPearson);
-            ShapeDescriptor::free::array(descriptorOne);
-            ShapeDescriptor::free::array(descriptorTwo);
-            ShapeDescriptor::free::array(transformedOriginal);
-            ShapeDescriptor::free::array(transformedComparison);
-            ShapeDescriptor::free::array(descriptorOneGPU);
-            ShapeDescriptor::free::array(descriptorTwoGPU);
-            ShapeDescriptor::free::mesh(meshOne);
-            ShapeDescriptor::free::mesh(meshTwo);
+            metadata = Benchmarking::utilities::metadata::prepareMetadata("", meshOne.vertexCount);
+        }
+        else
+        {
+            metadata = Benchmarking::utilities::metadata::prepareMetadata(metadataPath.value());
         }
 
-        std::ofstream outFile(outPath + "/spinImageDistanceTest.csv");
-        outFile << output;
-        outFile.close();
+        std::chrono::duration<double> elapsedTimeOne;
+        std::chrono::duration<double> elapsedTimeTwo;
+
+        descriptorType descriptorOne = generateDescriptorsForObject(meshOne, 3, hardware.value(), elapsedTimeOne);
+        descriptorType descriptorTwo = generateDescriptorsForObject(meshTwo, 3, hardware.value(), elapsedTimeTwo);
+
+        ShapeDescriptor::free::mesh(meshOne);
+        ShapeDescriptor::free::mesh(meshTwo);
+
+        double similarity = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(std::get<3>(descriptorOne), std::get<3>(descriptorTwo), 0, true);
+
+        std::cout << "Similarity: " << similarity << std::endl;
     }
     else if (objectsFolder.value() != "" && originalsFolderName.value() != "" && (originalObject.value() == "" && comparisonObject.value() == ""))
     {
