@@ -15,24 +15,9 @@ namespace Benchmarking
     {
         namespace metadata
         {
-            int getNumberOfDeletedVerticiesInMetadata(std::vector<std::variant<int, std::string>> metadata)
-            {
-                int numberOfDeletedVerticies = 0;
-                for (int i = 0; i < metadata.size(); i++)
-                {
-                    try
-                    {
-                        std::get<int>(metadata[i]);
-                    }
-                    catch (std::exception &e)
-                    {
-                        numberOfDeletedVerticies++;
-                    }
-                }
-                return numberOfDeletedVerticies;
-            }
+            int getNumberOfDeletedVerticiesInMetadata(std::vector<std::variant<int, std::string>> metadata);
 
-            // Need to be implemented in header, as C++ requires it
+            // C++ requires template functions to be implemented in header files
             template <typename T>
             std::vector<ShapeDescriptor::cpu::array<T>> transformDescriptorsToMatchMetadata(
                 ShapeDescriptor::cpu::array<T> descriptorOriginal,
@@ -51,6 +36,7 @@ namespace Benchmarking
                 while (metadataIndex < realLengthOfDescriptor)
                 {
                     int comparsisonIndex;
+
                     try
                     {
                         comparsisonIndex = std::get<int>(metadata[descriptorIndex]);
@@ -60,6 +46,9 @@ namespace Benchmarking
                         descriptorIndex++;
                         continue;
                     }
+
+                    if (comparsisonIndex >= descriptorComparison.length)
+                        break;
 
                     transformedOriginalDescriptor.content[metadataIndex] = descriptorOriginal.content[metadataIndex];
                     transformedComparisonDescriptor.content[metadataIndex] = descriptorComparison.content[comparsisonIndex];

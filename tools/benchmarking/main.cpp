@@ -7,6 +7,7 @@
 #include <shapeDescriptor/utilities/free/mesh.h>
 #include <shapeDescriptor/utilities/free/array.h>
 #include <shapeDescriptor/gpu/spinImageSearcher.cuh>
+#include <shapeDescriptor/gpu/radialIntersectionCountImageSearcher.cuh>
 #include <shapeDescriptor/common/types/methods/SpinImageDescriptor.h>
 #include <benchmarking/utilities/descriptor/RICI.h>
 #include <benchmarking/utilities/descriptor/QUICCI.h>
@@ -17,6 +18,7 @@
 #include <benchmarking/utilities/metadata/generateFakeMetadata.h>
 #include <benchmarking/utilities/metadata/prepareMetadata.h>
 #include <benchmarking/utilities/metadata/transformDescriptor.h>
+#include <benchmarking/utilities/noisefloor/noiseFloorGenerator.h>
 #include <tuple>
 #include <iostream>
 #include <fstream>
@@ -50,9 +52,6 @@ std::map<int, std::string> descriptorAlgorithms = {
     {3, "3DSC"},
     {4, "FPFH"}};
 
-std::map<int, std::string>
-    distanceFunctions = {{0, "Cosine"}, {1, "Euclidian"}};
-
 struct
 {
     std::string name;
@@ -70,61 +69,30 @@ std::string getRunDate()
     return ss.str();
 }
 
-descriptorType generateDescriptorsForObject(ShapeDescriptor::cpu::Mesh mesh,
-                                            int algorithm,
-                                            std::string hardware,
-                                            std::chrono::duration<double> &elapsedTime,
-                                            float supportRadius = 2.5f,
-                                            float supportAngleDegrees = 60.0f,
-                                            float pointDensityRadius = 0.2f,
-                                            float minSupportRadius = 0.1f,
-                                            float maxSupportRadius = 2.5f,
-                                            size_t pointCloudSampleCount = 100000,
-                                            size_t randomSeed = 133713375318008)
+int minDistanceInClutterResistantDistance(ShapeDescriptor::cpu::array<int> distances)
 {
-    descriptorType descriptor;
+    int minDistance = 1000000;
+    for (int i = 0; i < distances.length; i++)
+    {
+        if (distances[i] < minDistance)
+        {
+            minDistance = distances[i];
+        }
+    }
+    return minDistance;
+}
 
-    switch (algorithm)
+int maxDistanceInClutterResistantDistance(ShapeDescriptor::cpu::array<int> distances)
+{
+    int maxDistance = 0;
+    for (int i = 0; i < distances.length; i++)
     {
-    case 0:
-    {
-        descriptor = Benchmarking::utilities::descriptor::generateRICIDescriptor(
-            mesh, hardware, supportRadius, elapsedTime);
-        break;
+        if (distances[i] > maxDistance)
+        {
+            maxDistance = distances[i];
+        }
     }
-    case 1:
-    {
-        descriptor = Benchmarking::utilities::descriptor::generateQUICCIDescriptor(
-            mesh, hardware, supportRadius, elapsedTime);
-        break;
-    }
-    case 2:
-    {
-        descriptor = Benchmarking::utilities::descriptor::generateSpinImageDescriptor(
-            mesh, hardware, supportRadius, supportAngleDegrees, pointCloudSampleCount, randomSeed, elapsedTime);
-        break;
-    }
-    case 3:
-    {
-        descriptor = Benchmarking::utilities::descriptor::generate3DShapeContextDescriptor(
-            mesh, hardware, pointCloudSampleCount, randomSeed, pointDensityRadius, minSupportRadius, maxSupportRadius, elapsedTime);
-        break;
-    }
-    case 4:
-    {
-        descriptor = Benchmarking::utilities::descriptor::generateFPFHDescriptor(
-            mesh, hardware, supportRadius, pointCloudSampleCount, randomSeed, elapsedTime);
-        break;
-    }
-    default:
-    {
-        descriptor = Benchmarking::utilities::descriptor::generateRICIDescriptor(
-            mesh, hardware, supportRadius, elapsedTime);
-        break;
-    }
-    };
-
-    return descriptor;
+    return maxDistance;
 }
 
 template <typename T>
@@ -172,6 +140,63 @@ double calculateSimilarity(ShapeDescriptor::cpu::array<T> dOriginal, ShapeDescri
     return sim;
 }
 
+descriptorType generateDescriptorsForObject(ShapeDescriptor::cpu::Mesh mesh,
+                                            int algorithm,
+                                            std::string hardware,
+                                            std::chrono::duration<double> &elapsedTime,
+                                            float supportRadius = 2.5f,
+                                            float supportAngleDegrees = 60.0f,
+                                            float pointDensityRadius = 0.2f,
+                                            float minSupportRadius = 0.1f,
+                                            float maxSupportRadius = 2.5f,
+                                            size_t pointCloudSampleCount = 200000,
+                                            size_t randomSeed = 4917133789385064)
+{
+    descriptorType descriptor;
+
+    switch (algorithm)
+    {
+    case 0:
+    {
+        descriptor = Benchmarking::utilities::descriptor::generateRICIDescriptor(
+            mesh, hardware, supportRadius, elapsedTime);
+        break;
+    }
+    case 1:
+    {
+        descriptor = Benchmarking::utilities::descriptor::generateQUICCIDescriptor(
+            mesh, hardware, supportRadius, elapsedTime);
+        break;
+    }
+    case 2:
+    {
+        descriptor = Benchmarking::utilities::descriptor::generateSpinImageDescriptor(
+            mesh, hardware, supportRadius, supportAngleDegrees, pointCloudSampleCount, randomSeed, elapsedTime);
+        break;
+    }
+    case 3:
+    {
+        descriptor = Benchmarking::utilities::descriptor::generate3DShapeContextDescriptor(
+            mesh, hardware, pointCloudSampleCount, randomSeed, pointDensityRadius, minSupportRadius, maxSupportRadius, elapsedTime);
+        break;
+    }
+    case 4:
+    {
+        descriptor = Benchmarking::utilities::descriptor::generateFPFHDescriptor(
+            mesh, hardware, supportRadius, pointCloudSampleCount, randomSeed, elapsedTime);
+        break;
+    }
+    default:
+    {
+        descriptor = Benchmarking::utilities::descriptor::generateRICIDescriptor(
+            mesh, hardware, supportRadius, elapsedTime);
+        break;
+    }
+    };
+
+    return descriptor;
+}
+
 template <typename T>
 void freeDescriptorType(ShapeDescriptor::cpu::array<T> descriptor)
 {
@@ -189,7 +214,20 @@ int getNumberOfFilesInFolder(std::string folderPath)
     return numberOfFiles;
 }
 
-void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFolderName, std::string jsonPath, std::string hardware, std::string compareFolder, std::string previousRunPath)
+void multipleObjectsBenchmark(
+    std::string objectsFolder,
+    std::string originalsFolderName,
+    std::string jsonPath,
+    std::string hardware,
+    std::string compareFolder,
+    std::string previousRunPath,
+    float supportRadius = 2.5f,
+    float supportAngleDegrees = 60.0f,
+    float pointDensityRadius = 0.2f,
+    float minSupportRadius = 0.1f,
+    float maxSupportRadius = 2.5f,
+    size_t pointCloudSampleCount = 200000,
+    size_t randomSeed = 4917133789385064)
 {
     std::vector<std::string> folders;
     std::string originalObjectFolderPath;
@@ -205,14 +243,6 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
     std::string originalObjectCategory = "0-100";
 
     std::string outputDirectory = jsonPath + "/" + getRunDate();
-
-    float supportRadius = 1.5f;
-    float supportAngleDegrees = 0.0f;
-    float pointDensityRadius = 0.2f;
-    float minSupportRadius = 0.1f;
-    float maxSupportRadius = 2.5f;
-    size_t pointCloudSampleCount = 200000;
-    size_t randomSeed = 4917133789385064;
 
     for (auto &p : std::filesystem::directory_iterator(objectsFolder))
     {
@@ -312,6 +342,9 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                     std::chrono::duration<double> elapsedSecondsDescriptorComparison;
                     std::chrono::duration<double> elapsedSecondsDescriptorOriginal;
 
+                    std::chrono::steady_clock::time_point distanceTimeStart;
+                    std::chrono::steady_clock::time_point distanceTimeEnd;
+
                     if (previousRun["results"][fileName][comparisonFolderName][a.second][category].size() > 0)
                     {
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category] = previousRun["results"][fileName][comparisonFolderName][a.second][category];
@@ -328,8 +361,10 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         supportRadius, supportAngleDegrees, pointDensityRadius, minSupportRadius, maxSupportRadius,
                         pointCloudSampleCount, randomSeed);
 
-                    descriptorType transformedOriginalObject;
-                    descriptorType transformedComparisonObject;
+                    std::chrono::steady_clock::time_point distanceTimeStart;
+                    std::chrono::steady_clock::time_point distanceTimeEnd;
+
+                    std::string distanceFunction = "";
 
                     switch (a.first)
                     {
@@ -338,11 +373,29 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<0>(originalObject), std::get<0>(comparisonObject), metadata);
 
-                        transformedOriginalObject = transformed.at(0);
-                        transformedComparisonObject = transformed.at(1);
-
                         freeDescriptorType(std::get<0>(originalObject));
                         freeDescriptorType(std::get<0>(comparisonObject));
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
+                            transformed.at(0);
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> comparison =
+                            transformed.at(1);
+
+                        distanceFunction = "Clutter Resistant Distance";
+
+                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
+                        {
+                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
+                            // The length of the descriptor is the exact number of verticies
+                            // While the vertex count in the mesh class is just faces * 3, which is can sometimes be not accurate
+                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
+                        }
+
+                        distanceTimeStart = std::chrono::steady_clock::now();
+                        // Hente alle distanser, og regne ut gjennomsnitt
+                        // sim = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(original, comparison, d.first, freeArray);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         break;
                     }
                     case 1:
@@ -350,11 +403,26 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<1>(originalObject), std::get<1>(comparisonObject), metadata);
 
-                        transformedOriginalObject = transformed.at(0);
-                        transformedComparisonObject = transformed.at(1);
-
                         freeDescriptorType(std::get<1>(originalObject));
                         freeDescriptorType(std::get<1>(comparisonObject));
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor> original =
+                            transformed.at(0);
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor> comparison =
+                            transformed.at(1);
+
+                        distanceFunction = "Weighted Hamming Distance";
+
+                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
+                        {
+                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
+                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
+                        }
+
+                        distanceTimeStart = std::chrono::steady_clock::now();
+                        // sim = calculateSimilarity<ShapeDescriptor::QUICCIDescriptor>(original, comparison, d.first, freeArray);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         break;
                     }
                     case 2:
@@ -362,11 +430,26 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<2>(originalObject), std::get<2>(comparisonObject), metadata);
 
-                        transformedOriginalObject = transformed.at(0);
-                        transformedComparisonObject = transformed.at(1);
-
                         freeDescriptorType(std::get<2>(originalObject));
                         freeDescriptorType(std::get<2>(comparisonObject));
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> original =
+                            transformed.at(0);
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> comparison =
+                            transformed.at(1);
+
+                        distanceFunction = "Pearson Correlation Coeffecient";
+
+                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
+                        {
+                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
+                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
+                        }
+
+                        distanceTimeStart = std::chrono::steady_clock::now();
+                        // sim = calculateSimilarity<ShapeDescriptor::SpinImageDescriptor>(original, comparison, d.first, freeArray);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         break;
                     }
                     case 3:
@@ -374,11 +457,26 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<3>(originalObject), std::get<3>(comparisonObject), metadata);
 
-                        transformedOriginalObject = transformed.at(0);
-                        transformedComparisonObject = transformed.at(1);
-
                         freeDescriptorType(std::get<3>(originalObject));
                         freeDescriptorType(std::get<3>(comparisonObject));
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor> original =
+                            transformed.at(0);
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor> comparison =
+                            transformed.at(1);
+
+                        distanceFunction = "Euclidean Distance";
+
+                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
+                        {
+                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
+                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
+                        }
+
+                        distanceTimeStart = std::chrono::steady_clock::now();
+                        // sim = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(original, comparison, d.first, freeArray);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         break;
                     }
                     case 4:
@@ -386,11 +484,25 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<4>(originalObject), std::get<4>(comparisonObject), metadata);
 
-                        transformedOriginalObject = transformed.at(0);
-                        transformedComparisonObject = transformed.at(1);
-
                         freeDescriptorType(std::get<4>(originalObject));
                         freeDescriptorType(std::get<4>(comparisonObject));
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor> original =
+                            transformed.at(0);
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor> comparison =
+                            transformed.at(1);
+
+                        distanceFunction = "Euclidean Distance";
+
+                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
+                        {
+                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
+                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
+                        }
+                        distanceTimeStart = std::chrono::steady_clock::now();
+                        // sim = calculateSimilarity<ShapeDescriptor::FPFHDescriptor>(original, comparison, d.first, freeArray);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         break;
                     }
                     default:
@@ -398,151 +510,44 @@ void multipleObjectsBenchmark(std::string objectsFolder, std::string originalsFo
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<0>(originalObject), std::get<0>(comparisonObject), metadata);
 
-                        transformedOriginalObject = transformed.at(0);
-                        transformedComparisonObject = transformed.at(1);
-
                         freeDescriptorType(std::get<0>(originalObject));
                         freeDescriptorType(std::get<0>(comparisonObject));
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
+                            transformed.at(0);
+
+                        ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> comparison =
+                            transformed.at(1);
+
+                        distanceFunction = "Clutter Resistant Distance";
+
+                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
+                        {
+                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
+                            // The length of the descriptor is the exact number of verticies
+                            // While the vertex count in the mesh class is just faces * 3, which is can sometimes be not accurate
+                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
+                        }
+
+                        distanceTimeStart = std::chrono::steady_clock::now();
+                        // Hente alle distanser, og regne ut gjennomsnitt
+                        // sim = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(original, comparison, d.first, freeArray);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         break;
                     }
                     }
 
-                    for (auto d : distanceFunctions)
-                    {
-                        bool freeArray = d.first == distanceFunctions.size() - 1;
-                        double sim = 0;
+                    std::chrono::duration<double> elapsedSecondsDistance = distanceTimeEnd - distanceTimeStart;
 
-                        std::chrono::steady_clock::time_point distanceTimeStart;
-                        std::chrono::steady_clock::time_point distanceTimeEnd;
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category]["generationTime"] = elapsedSecondsDescriptorComparison.count();
 
-                        switch (a.first)
-                        {
-                        case 0:
-                        {
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
-                                std::get<0>(transformedOriginalObject);
-
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> comparison =
-                                std::get<0>(transformedComparisonObject);
-
-                            if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                            {
-                                originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                                // The length of the descriptor is the exact number of verticies
-                                // While the vertex count in the mesh class is just faces * 3, which is can sometimes be not accurate
-                                originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                            }
-
-                            distanceTimeStart = std::chrono::steady_clock::now();
-                            sim = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(original, comparison, d.first, freeArray);
-                            distanceTimeEnd = std::chrono::steady_clock::now();
-                            break;
-                        }
-                        case 1:
-                        {
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor> original =
-                                std::get<1>(transformedOriginalObject);
-
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor> comparison =
-                                std::get<1>(transformedComparisonObject);
-
-                            if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                            {
-                                originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                                originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                            }
-
-                            distanceTimeStart = std::chrono::steady_clock::now();
-                            sim = calculateSimilarity<ShapeDescriptor::QUICCIDescriptor>(original, comparison, d.first, freeArray);
-                            distanceTimeEnd = std::chrono::steady_clock::now();
-                            break;
-                        }
-                        case 2:
-                        {
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> original =
-                                std::get<2>(transformedOriginalObject);
-
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> comparison =
-                                std::get<2>(transformedComparisonObject);
-
-                            if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                            {
-                                originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                                originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                            }
-
-                            distanceTimeStart = std::chrono::steady_clock::now();
-                            sim = calculateSimilarity<ShapeDescriptor::SpinImageDescriptor>(original, comparison, d.first, freeArray);
-                            distanceTimeEnd = std::chrono::steady_clock::now();
-                            break;
-                        }
-                        case 3:
-                        {
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor> original =
-                                std::get<3>(transformedOriginalObject);
-
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor> comparison =
-                                std::get<3>(transformedComparisonObject);
-
-                            if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                            {
-                                originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                                originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                            }
-
-                            distanceTimeStart = std::chrono::steady_clock::now();
-                            sim = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(original, comparison, d.first, freeArray);
-                            distanceTimeEnd = std::chrono::steady_clock::now();
-                            break;
-                        }
-                        case 4:
-                        {
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor> original =
-                                std::get<4>(transformedOriginalObject);
-
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor> comparison =
-                                std::get<4>(transformedComparisonObject);
-
-                            if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                            {
-                                originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                                originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                            }
-                            distanceTimeStart = std::chrono::steady_clock::now();
-                            sim = calculateSimilarity<ShapeDescriptor::FPFHDescriptor>(original, comparison, d.first, freeArray);
-                            distanceTimeEnd = std::chrono::steady_clock::now();
-                            break;
-                        }
-                        default:
-                        {
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
-                                std::get<0>(transformedOriginalObject);
-
-                            ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> comparison =
-                                std::get<0>(transformedComparisonObject);
-
-                            if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                            {
-                                originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                                originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                            }
-
-                            distanceTimeStart = std::chrono::steady_clock::now();
-                            sim = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(original, comparison, d.first, freeArray);
-                            distanceTimeEnd = std::chrono::steady_clock::now();
-                            break;
-                        }
-                        }
-
-                        std::chrono::duration<double> elapsedSecondsDistance = distanceTimeEnd - distanceTimeStart;
-
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category]["generationTime"] = elapsedSecondsDescriptorComparison.count();
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][d.second]["similarity"] = (double)sim;
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][d.second]["time"] = elapsedSecondsDistance.count();
-                    }
+                    // Kan bli average distanse
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["similarity"] = (double)0.0;
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["time"] = elapsedSecondsDistance.count();
                 }
                 ShapeDescriptor::free::mesh(meshOriginal);
                 ShapeDescriptor::free::mesh(meshComparison);
+
                 metadata.clear();
 
                 std::chrono::steady_clock::time_point timeAfter = std::chrono::steady_clock::now();
@@ -575,6 +580,8 @@ int main(int argc, const char **argv)
     const auto &descriptorAlgorithm = parser.add<int>("descriptor-algorithm", "Which descriptor algorithm to use [0 for radial-intersection-count-images, 1 for quick-intersection-count-change-images ...will add more:)]", 'a', arrrgh::Optional, 0);
     const auto &distanceAlgorithm = parser.add<int>("distance-algorithm", "Which distance algorithm to use [0 for euclidian, ...will add more:)]", 'd', arrrgh::Optional, 0);
     const auto &hardware = parser.add<std::string>("hardware-type", "cpu or gpu (gpu is default, as cpu doesn't support all the descriptors)", 't', arrrgh::Optional, "gpu");
+    const auto &noisefloor = parser.add<int>("noisefloor", "Integer representing if you want to generate noisefloor or not, (0 for false, 1 for true)", 'N', arrrgh::Optional, 0);
+    const auto &noisefloorObjects = parser.add<std::string>("noisefloor-objects", "Path to the folder containing the noisefloor objects", 'O', arrrgh::Optional, "");
     const auto &help = parser.add<bool>("help", "Show help", 'h', arrrgh::Optional, false);
 
     try
@@ -592,6 +599,14 @@ int main(int argc, const char **argv)
     {
         return 0;
     }
+
+    float supportRadius = 1.5f;
+    float supportAngleDegrees = 60.0f;
+    float pointDensityRadius = 0.2f;
+    float minSupportRadius = 0.1f;
+    float maxSupportRadius = 2.5f;
+    size_t pointCloudSampleCount = 200000;
+    size_t randomSeed = 4917133789385064;
 
 #ifdef DESCRIPTOR_CUDA_KERNELS_ENABLED
     cudaDeviceProp device_information;
@@ -631,15 +646,81 @@ int main(int argc, const char **argv)
 
         ShapeDescriptor::free::mesh(meshOne);
         ShapeDescriptor::free::mesh(meshTwo);
+    }
+    else if (noisefloor.value() == 1)
+    {
+        if (!std::filesystem::exists(noisefloorObjects.value()))
+        {
+            std::cout << "Noisefloor objects folder does not exist" << std::endl;
+            return 1;
+        }
 
-        double similarity = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(std::get<3>(descriptorOne), std::get<3>(descriptorTwo), 0, true);
+        json noiseFloors;
+        std::vector<std::string> noisefloorObjectPaths;
 
-        std::cout << "Similarity: " << similarity << std::endl;
+        int timeStart = std::time(0);
+
+        for (auto &originalNoiseObject : std::filesystem::directory_iterator(noisefloorObjects.value()))
+        {
+            for (auto &comparisonNoiseObject : std::filesystem::directory_iterator(noisefloorObjects.value()))
+            {
+                if (originalNoiseObject.path() == comparisonNoiseObject.path() || (originalNoiseObject.path().extension() != ".obj" || comparisonNoiseObject.path().extension() != ".obj"))
+                    continue;
+
+                std::filesystem::path objectOne = originalNoiseObject;
+                std::filesystem::path objectTwo = comparisonNoiseObject;
+
+                std::cout << "Generating noisefloor for " << objectOne.filename() << " and " << objectTwo.filename() << std::endl;
+
+                noiseFloors[originalNoiseObject.path().filename()][comparisonNoiseObject.path().filename()] =
+                    Benchmarking::utilities::noisefloor::generateNoiseFloor(
+                        objectOne,
+                        objectTwo,
+                        descriptorAlgorithm.value(),
+                        hardware.value(),
+                        supportRadius,
+                        supportAngleDegrees,
+                        pointDensityRadius,
+                        minSupportRadius,
+                        maxSupportRadius,
+                        pointCloudSampleCount,
+                        randomSeed);
+            }
+        }
+
+        noiseFloors["runDate"] = getRunDate();
+        noiseFloors["static"] = {};
+        noiseFloors["static"]["supportRadius"] = supportRadius;
+        noiseFloors["static"]["supportAngleDegrees"] = supportAngleDegrees;
+        noiseFloors["static"]["pointDensityRadius"] = pointDensityRadius;
+        noiseFloors["static"]["minSupportRadius"] = minSupportRadius;
+        noiseFloors["static"]["maxSupportRadius"] = maxSupportRadius;
+        noiseFloors["static"]["pointCloudSampleCount"] = pointCloudSampleCount;
+        noiseFloors["static"]["randomSeed"] = randomSeed;
+        noiseFloors["shapeDescriptor"] = descriptorAlgorithm.value();
+
+        std::string noiseOutputPath = outputPath.value() + "/" + std::to_string(descriptorAlgorithm.value()) + "-noisefloor-" + getRunDate() + ".json";
+        std::ofstream noiseOut(noiseOutputPath);
+        noiseOut << noiseFloors.dump(4);
+        noiseOut.close();
     }
     else if (objectsFolder.value() != "" && originalsFolderName.value() != "" && (originalObject.value() == "" && comparisonObject.value() == ""))
     {
         std::cout << "Comparing all objects in folder..." << std::endl;
-        multipleObjectsBenchmark(objectsFolder.value(), originalsFolderName.value(), outputPath.value(), hardware.value(), compareFolder.value(), previousRunFile.value());
+        multipleObjectsBenchmark(
+            objectsFolder.value(),
+            originalsFolderName.value(),
+            outputPath.value(),
+            hardware.value(),
+            compareFolder.value(),
+            previousRunFile.value(),
+            supportRadius,
+            supportAngleDegrees,
+            pointDensityRadius,
+            minSupportRadius,
+            maxSupportRadius,
+            pointCloudSampleCount,
+            randomSeed);
 
         std::string originalObjectsDataPath = outputPath.value() + "/" + getRunDate() + "-" + originalsFolderName.value() + "/" + originalsFolderName.value() + ".json";
 
