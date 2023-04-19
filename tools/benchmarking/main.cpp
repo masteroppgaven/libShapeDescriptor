@@ -69,32 +69,6 @@ std::string getRunDate()
     return ss.str();
 }
 
-int minDistanceInClutterResistantDistance(ShapeDescriptor::cpu::array<int> distances)
-{
-    int minDistance = 1000000;
-    for (int i = 0; i < distances.length; i++)
-    {
-        if (distances[i] < minDistance)
-        {
-            minDistance = distances[i];
-        }
-    }
-    return minDistance;
-}
-
-int maxDistanceInClutterResistantDistance(ShapeDescriptor::cpu::array<int> distances)
-{
-    int maxDistance = 0;
-    for (int i = 0; i < distances.length; i++)
-    {
-        if (distances[i] > maxDistance)
-        {
-            maxDistance = distances[i];
-        }
-    }
-    return maxDistance;
-}
-
 template <typename T>
 float calculateAverageSimilartyFromDistancesArray(ShapeDescriptor::cpu::array<T> distances)
 {
@@ -341,9 +315,6 @@ void multipleObjectsBenchmark(
                 {
                     std::chrono::duration<double> elapsedSecondsDescriptorComparison;
                     std::chrono::duration<double> elapsedSecondsDescriptorOriginal;
-
-                    std::chrono::steady_clock::time_point distanceTimeStart;
-                    std::chrono::steady_clock::time_point distanceTimeEnd;
 
                     if (previousRun["results"][fileName][comparisonFolderName][a.second][category].size() > 0)
                     {
@@ -649,43 +620,36 @@ int main(int argc, const char **argv)
     }
     else if (noisefloor.value() == 1)
     {
-        if (!std::filesystem::exists(noisefloorObjects.value()))
-        {
-            std::cout << "Noisefloor objects folder does not exist" << std::endl;
-            return 1;
-        }
-
         json noiseFloors;
         std::vector<std::string> noisefloorObjectPaths;
 
         int timeStart = std::time(0);
 
-        for (auto &originalNoiseObject : std::filesystem::directory_iterator(noisefloorObjects.value()))
+        int numberOfObjects = 100;
+        std::string objectsFolder = "/mnt/VOID/projects/shape_descriptors_benchmark/Dataset/NewRecalculatedNormals/0-100/";
+
+        for (int object = 0; object < numberOfObjects; object++)
         {
-            for (auto &comparisonNoiseObject : std::filesystem::directory_iterator(noisefloorObjects.value()))
-            {
-                if (originalNoiseObject.path() == comparisonNoiseObject.path() || (originalNoiseObject.path().extension() != ".obj" || comparisonNoiseObject.path().extension() != ".obj"))
-                    continue;
+            std::string objectStr = std::to_string(object);
+            std::string objectName = std::string(4 - objectStr.length(), '0') + objectStr;
 
-                std::filesystem::path objectOne = originalNoiseObject;
-                std::filesystem::path objectTwo = comparisonNoiseObject;
+            std::filesystem::path objectPath = objectsFolder + objectName + "/" + objectName + ".obj";
 
-                std::cout << "Generating noisefloor for " << objectOne.filename() << " and " << objectTwo.filename() << std::endl;
+            std::cout << "Generating noise roof for " << objectPath << std::endl;
 
-                noiseFloors[originalNoiseObject.path().filename()][comparisonNoiseObject.path().filename()] =
-                    Benchmarking::utilities::noisefloor::generateNoiseFloor(
-                        objectOne,
-                        objectTwo,
-                        descriptorAlgorithm.value(),
-                        hardware.value(),
-                        supportRadius,
-                        supportAngleDegrees,
-                        pointDensityRadius,
-                        minSupportRadius,
-                        maxSupportRadius,
-                        pointCloudSampleCount,
-                        randomSeed);
-            }
+            noiseFloors[objectName + ".obj"][objectName + ".obj"] =
+                Benchmarking::utilities::noisefloor::generateNoiseFloor(
+                    objectPath,
+                    objectPath,
+                    descriptorAlgorithm.value(),
+                    hardware.value(),
+                    supportRadius,
+                    supportAngleDegrees,
+                    pointDensityRadius,
+                    minSupportRadius,
+                    maxSupportRadius,
+                    pointCloudSampleCount,
+                    randomSeed);
         }
 
         noiseFloors["runDate"] = getRunDate();
@@ -699,7 +663,7 @@ int main(int argc, const char **argv)
         noiseFloors["static"]["randomSeed"] = randomSeed;
         noiseFloors["shapeDescriptor"] = descriptorAlgorithm.value();
 
-        std::string noiseOutputPath = outputPath.value() + "/" + std::to_string(descriptorAlgorithm.value()) + "-noisefloor-" + getRunDate() + ".json";
+        std::string noiseOutputPath = outputPath.value() + "/" + std::to_string(descriptorAlgorithm.value()) + "-noiseroof-" + getRunDate() + ".json";
         std::ofstream noiseOut(noiseOutputPath);
         noiseOut << noiseFloors.dump(4);
         noiseOut.close();
