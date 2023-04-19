@@ -35,7 +35,11 @@ json distanceArrayToJson(T distanceArray)
 }
 
 template <typename T>
-json getDescriptorDistances(ShapeDescriptor::cpu::array<T> descriptorOne, ShapeDescriptor::cpu::array<T> descriptorTwo)
+json getDescriptorDistances(
+    ShapeDescriptor::cpu::array<T> descriptorOne,
+    ShapeDescriptor::cpu::array<T> descriptorTwo,
+    size_t descriptorSampleCount = 200000,
+    size_t correspondingDescriptorSampleCount = 200000)
 {
     json output;
 
@@ -72,7 +76,8 @@ json getDescriptorDistances(ShapeDescriptor::cpu::array<T> descriptorOne, ShapeD
     }
     else if constexpr (std::is_same_v<T, ShapeDescriptor::ShapeContextDescriptor>)
     {
-        NULL;
+        ShapeDescriptor::cpu::array<float> squaredDistances = ShapeDescriptor::gpu::compute3DSCElementWiseSquaredDistances(descriptorOneGPU, descriptorSampleCount, descriptorTwoGPU, correspondingDescriptorSampleCount);
+        output = distanceArrayToJson(squaredDistances);
     }
     else if constexpr (std::is_same_v<T, ShapeDescriptor::FPFHDescriptor>)
     {
@@ -164,7 +169,7 @@ json Benchmarking::utilities::noisefloor::generateNoiseFloor(
             Benchmarking::utilities::descriptor::generate3DShapeContextDescriptor(
                 meshTwo, hardware, pointCloudSampleCount, randomSeed, pointDensityRadius, minSupportRadius, maxSupportRadius, elapsedSecondsDescriptorTwo);
 
-        output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo);
+        output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo, pointCloudSampleCount, pointCloudSampleCount);
         break;
     }
     case 4:

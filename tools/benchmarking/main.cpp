@@ -69,32 +69,6 @@ std::string getRunDate()
     return ss.str();
 }
 
-int minDistanceInClutterResistantDistance(ShapeDescriptor::cpu::array<int> distances)
-{
-    int minDistance = 1000000;
-    for (int i = 0; i < distances.length; i++)
-    {
-        if (distances[i] < minDistance)
-        {
-            minDistance = distances[i];
-        }
-    }
-    return minDistance;
-}
-
-int maxDistanceInClutterResistantDistance(ShapeDescriptor::cpu::array<int> distances)
-{
-    int maxDistance = 0;
-    for (int i = 0; i < distances.length; i++)
-    {
-        if (distances[i] > maxDistance)
-        {
-            maxDistance = distances[i];
-        }
-    }
-    return maxDistance;
-}
-
 template <typename T>
 float calculateAverageSimilartyFromDistancesArray(ShapeDescriptor::cpu::array<T> distances)
 {
@@ -360,9 +334,6 @@ void multipleObjectsBenchmark(
                         meshComparison, a.first, hardware, elapsedSecondsDescriptorComparison,
                         supportRadius, supportAngleDegrees, pointDensityRadius, minSupportRadius, maxSupportRadius,
                         pointCloudSampleCount, randomSeed);
-
-                    std::chrono::steady_clock::time_point distanceTimeStart;
-                    std::chrono::steady_clock::time_point distanceTimeEnd;
 
                     std::string distanceFunction = "";
 
