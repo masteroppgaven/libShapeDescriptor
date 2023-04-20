@@ -6,8 +6,11 @@
 #include <shapeDescriptor/cpu/spinImageGenerator.h>
 #include <shapeDescriptor/utilities/free/mesh.h>
 #include <shapeDescriptor/utilities/free/array.h>
-#include <shapeDescriptor/gpu/spinImageSearcher.cuh>
 #include <shapeDescriptor/gpu/radialIntersectionCountImageSearcher.cuh>
+#include <shapeDescriptor/gpu/quickIntersectionCountImageSearcher.cuh>
+#include <shapeDescriptor/gpu/spinImageSearcher.cuh>
+#include <shapeDescriptor/gpu/3dShapeContextSearcher.cuh>
+#include <shapeDescriptor/gpu/fastPointFeatureHistogramSearcher.cuh>
 #include <shapeDescriptor/common/types/methods/SpinImageDescriptor.h>
 #include <benchmarking/utilities/descriptor/RICI.h>
 #include <benchmarking/utilities/descriptor/QUICCI.h>
@@ -70,23 +73,48 @@ std::string getRunDate()
 }
 
 template <typename T>
-float calculateAverageSimilartyFromDistancesArray(ShapeDescriptor::cpu::array<T> distances)
+T minDistance(ShapeDescriptor::cpu::array<T> distances)
 {
-    float simSum = 0;
-
+    T minDistance = 1000000;
     for (int i = 0; i < distances.length; i++)
     {
-        float sim = 1 / (1 + distances[i]);
-        if (!isnan(sim))
-            simSum += sim;
+        if (distances[i] < minDistance)
+        {
+            minDistance = distances[i];
+        }
     }
-    float avgSim = simSum / distances.length;
-
-    return avgSim;
+    return minDistance;
 }
 
 template <typename T>
-float calculateAverageSimilarity(ShapeDescriptor::cpu::array<T> distances)
+T maxDistance(ShapeDescriptor::cpu::array<T> distances)
+{
+    T maxDistance = 0;
+    for (int i = 0; i < distances.length; i++)
+    {
+        if (distances[i] > maxDistance)
+        {
+            maxDistance = distances[i];
+        }
+    }
+    return maxDistance;
+}
+
+template <typename T>
+float standardDeviationOfDistances(ShapeDescriptor::cpu::array<T> distances, float average)
+{
+    float sum = 0;
+
+    for (int i = 0; i < distances.length; i++)
+    {
+        sum += pow(distances[i] - average, 2);
+    }
+
+    return sqrt(sum / distances.length);
+}
+
+template <typename T>
+float calculateAverageDistance(ShapeDescriptor::cpu::array<T> distances)
 {
     float simSum = 0;
 
@@ -98,20 +126,6 @@ float calculateAverageSimilarity(ShapeDescriptor::cpu::array<T> distances)
     float avgSim = simSum / distances.length;
 
     return avgSim;
-}
-
-template <typename T>
-double calculateSimilarity(ShapeDescriptor::cpu::array<T> dOriginal, ShapeDescriptor::cpu::array<T> dComparison, int distanceFunction, bool freeArray)
-{
-    double sim = Benchmarking::utilities::distance::similarityBetweenTwoDescriptors<T>(dOriginal, dComparison, distanceFunction);
-
-    if (freeArray)
-    {
-        ShapeDescriptor::free::array(dOriginal);
-        ShapeDescriptor::free::array(dComparison);
-    }
-
-    return sim;
 }
 
 descriptorType generateDescriptorsForObject(ShapeDescriptor::cpu::Mesh mesh,
@@ -171,12 +185,6 @@ descriptorType generateDescriptorsForObject(ShapeDescriptor::cpu::Mesh mesh,
     return descriptor;
 }
 
-template <typename T>
-void freeDescriptorType(ShapeDescriptor::cpu::array<T> descriptor)
-{
-    ShapeDescriptor::free::array(descriptor);
-}
-
 int getNumberOfFilesInFolder(std::string folderPath)
 {
     int numberOfFiles = 0;
@@ -216,8 +224,6 @@ void multipleObjectsBenchmark(
     // This is hard coded for now, as this fits how we have structured the folder. Should be edited if you want the code more dynamic:^)
     std::string originalObjectCategory = "0-100";
 
-    std::string outputDirectory = jsonPath + "/" + getRunDate();
-
     for (auto &p : std::filesystem::directory_iterator(objectsFolder))
     {
         if (p.is_directory())
@@ -243,9 +249,11 @@ void multipleObjectsBenchmark(
         json jsonOutput;
         std::string comparisonFolderName = folder.substr(folder.find_last_of("/") + 1);
 
-        if (!std::filesystem::exists(outputDirectory + "-" + comparisonFolderName))
+        std::string outputDirectory = jsonPath + "/" + comparisonFolderName + "-" + getRunDate();
+
+        if (!std::filesystem::exists(outputDirectory))
         {
-            std::filesystem::create_directory(outputDirectory + "-" + comparisonFolderName);
+            std::filesystem::create_directory(outputDirectory);
         }
 
         jsonOutput["runDate"] = getRunDate();
@@ -273,6 +281,8 @@ void multipleObjectsBenchmark(
         for (auto &categoryPath : std::filesystem::directory_iterator(folder))
         {
             std::string category = categoryPath.path().string().substr(categoryPath.path().string().find_last_of("/") + 1);
+
+            std::cout << categoryPath.path().string() << std::endl;
 
             if (!categoryPath.is_directory())
                 continue;
@@ -319,6 +329,11 @@ void multipleObjectsBenchmark(
                     std::chrono::steady_clock::time_point distanceTimeStart;
                     std::chrono::steady_clock::time_point distanceTimeEnd;
 
+                    float averageDistance = 0.0f;
+                    float standardDeviation = 0.0f;
+                    float min = 0.0f;
+                    float max = 0.0f;
+
                     if (previousRun["results"][fileName][comparisonFolderName][a.second][category].size() > 0)
                     {
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category] = previousRun["results"][fileName][comparisonFolderName][a.second][category];
@@ -344,8 +359,8 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<0>(originalObject), std::get<0>(comparisonObject), metadata);
 
-                        freeDescriptorType(std::get<0>(originalObject));
-                        freeDescriptorType(std::get<0>(comparisonObject));
+                        ShapeDescriptor::free::array(std::get<0>(originalObject));
+                        ShapeDescriptor::free::array(std::get<0>(comparisonObject));
 
                         ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
                             transformed.at(0);
@@ -363,10 +378,22 @@ void multipleObjectsBenchmark(
                             originalObjectsData["results"][fileName]["vertexCount"] = original.length;
                         }
 
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> comparisonGPU = comparison.copyToGPU();
+
                         distanceTimeStart = std::chrono::steady_clock::now();
-                        // Hente alle distanser, og regne ut gjennomsnitt
-                        // sim = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(original, comparison, d.first, freeArray);
+                        ShapeDescriptor::cpu::array<int> crdDistances = ShapeDescriptor::gpu::computeRICIElementWiseModifiedSquareSumDistances(originalGPU, comparisonGPU);
+                        averageDistance = calculateAverageDistance(crdDistances);
+                        standardDeviation = standardDeviationOfDistances(crdDistances, averageDistance);
+                        min = minDistance(crdDistances);
+                        max = maxDistance(crdDistances);
                         distanceTimeEnd = std::chrono::steady_clock::now();
+
+                        ShapeDescriptor::free::array(original);
+                        ShapeDescriptor::free::array(comparison);
+                        ShapeDescriptor::free::array(originalGPU);
+                        ShapeDescriptor::free::array(comparisonGPU);
+                        ShapeDescriptor::free::array(crdDistances);
                         break;
                     }
                     case 1:
@@ -374,8 +401,8 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<1>(originalObject), std::get<1>(comparisonObject), metadata);
 
-                        freeDescriptorType(std::get<1>(originalObject));
-                        freeDescriptorType(std::get<1>(comparisonObject));
+                        ShapeDescriptor::free::array(std::get<1>(originalObject));
+                        ShapeDescriptor::free::array(std::get<1>(comparisonObject));
 
                         ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor> original =
                             transformed.at(0);
@@ -391,9 +418,22 @@ void multipleObjectsBenchmark(
                             originalObjectsData["results"][fileName]["vertexCount"] = original.length;
                         }
 
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::QUICCIDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::QUICCIDescriptor> comparisonGPU = comparison.copyToGPU();
+
                         distanceTimeStart = std::chrono::steady_clock::now();
-                        // sim = calculateSimilarity<ShapeDescriptor::QUICCIDescriptor>(original, comparison, d.first, freeArray);
+                        ShapeDescriptor::cpu::array<float> weightedHammingDistances = ShapeDescriptor::gpu::computeQUICCIElementWiseWeightedHammingDistances(originalGPU, comparisonGPU);
+                        averageDistance = calculateAverageDistance(weightedHammingDistances);
+                        standardDeviation = standardDeviationOfDistances(weightedHammingDistances, averageDistance);
+                        min = minDistance(weightedHammingDistances);
+                        max = maxDistance(weightedHammingDistances);
                         distanceTimeEnd = std::chrono::steady_clock::now();
+
+                        ShapeDescriptor::free::array(original);
+                        ShapeDescriptor::free::array(comparison);
+                        ShapeDescriptor::free::array(originalGPU);
+                        ShapeDescriptor::free::array(comparisonGPU);
+                        ShapeDescriptor::free::array(weightedHammingDistances);
                         break;
                     }
                     case 2:
@@ -401,8 +441,8 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<2>(originalObject), std::get<2>(comparisonObject), metadata);
 
-                        freeDescriptorType(std::get<2>(originalObject));
-                        freeDescriptorType(std::get<2>(comparisonObject));
+                        ShapeDescriptor::free::array(std::get<2>(originalObject));
+                        ShapeDescriptor::free::array(std::get<2>(comparisonObject));
 
                         ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> original =
                             transformed.at(0);
@@ -418,9 +458,21 @@ void multipleObjectsBenchmark(
                             originalObjectsData["results"][fileName]["vertexCount"] = original.length;
                         }
 
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> comparisonGPU = comparison.copyToGPU();
+
                         distanceTimeStart = std::chrono::steady_clock::now();
-                        // sim = calculateSimilarity<ShapeDescriptor::SpinImageDescriptor>(original, comparison, d.first, freeArray);
+                        ShapeDescriptor::cpu::array<float> pearsonCorrelations = ShapeDescriptor::gpu::computeSIElementWisePearsonCorrelations(originalGPU, comparisonGPU);
+                        standardDeviation = standardDeviationOfDistances(pearsonCorrelations, averageDistance);
+                        min = minDistance(pearsonCorrelations);
+                        max = maxDistance(pearsonCorrelations);
                         distanceTimeEnd = std::chrono::steady_clock::now();
+
+                        ShapeDescriptor::free::array(original);
+                        ShapeDescriptor::free::array(comparison);
+                        ShapeDescriptor::free::array(originalGPU);
+                        ShapeDescriptor::free::array(comparisonGPU);
+                        ShapeDescriptor::free::array(pearsonCorrelations);
                         break;
                     }
                     case 3:
@@ -428,8 +480,8 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<3>(originalObject), std::get<3>(comparisonObject), metadata);
 
-                        freeDescriptorType(std::get<3>(originalObject));
-                        freeDescriptorType(std::get<3>(comparisonObject));
+                        ShapeDescriptor::free::array(std::get<3>(originalObject));
+                        ShapeDescriptor::free::array(std::get<3>(comparisonObject));
 
                         ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor> original =
                             transformed.at(0);
@@ -445,9 +497,22 @@ void multipleObjectsBenchmark(
                             originalObjectsData["results"][fileName]["vertexCount"] = original.length;
                         }
 
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::ShapeContextDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::ShapeContextDescriptor> comparisonGPU = comparison.copyToGPU();
+
                         distanceTimeStart = std::chrono::steady_clock::now();
-                        // sim = calculateSimilarity<ShapeDescriptor::ShapeContextDescriptor>(original, comparison, d.first, freeArray);
+                        ShapeDescriptor::cpu::array<float> squaredDistances = ShapeDescriptor::gpu::compute3DSCElementWiseSquaredDistances(originalGPU, pointCloudSampleCount, comparisonGPU, pointCloudSampleCount);
+                        averageDistance = calculateAverageDistance(squaredDistances);
+                        standardDeviation = standardDeviationOfDistances(squaredDistances, averageDistance);
+                        min = minDistance(squaredDistances);
+                        max = maxDistance(squaredDistances);
                         distanceTimeEnd = std::chrono::steady_clock::now();
+
+                        ShapeDescriptor::free::array(original);
+                        ShapeDescriptor::free::array(comparison);
+                        ShapeDescriptor::free::array(originalGPU);
+                        ShapeDescriptor::free::array(comparisonGPU);
+                        ShapeDescriptor::free::array(squaredDistances);
                         break;
                     }
                     case 4:
@@ -455,8 +520,8 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<4>(originalObject), std::get<4>(comparisonObject), metadata);
 
-                        freeDescriptorType(std::get<4>(originalObject));
-                        freeDescriptorType(std::get<4>(comparisonObject));
+                        ShapeDescriptor::free::array(std::get<4>(originalObject));
+                        ShapeDescriptor::free::array(std::get<4>(comparisonObject));
 
                         ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor> original =
                             transformed.at(0);
@@ -471,9 +536,22 @@ void multipleObjectsBenchmark(
                             originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
                             originalObjectsData["results"][fileName]["vertexCount"] = original.length;
                         }
+
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::FPFHDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::FPFHDescriptor> comparisonGPU = comparison.copyToGPU();
+
                         distanceTimeStart = std::chrono::steady_clock::now();
-                        // sim = calculateSimilarity<ShapeDescriptor::FPFHDescriptor>(original, comparison, d.first, freeArray);
+                        ShapeDescriptor::cpu::array<float> euclideanDistances = ShapeDescriptor::gpu::computeFPFHElementWiseEuclideanDistances(originalGPU, comparisonGPU);
+                        standardDeviation = standardDeviationOfDistances(euclideanDistances, averageDistance);
+                        min = minDistance(euclideanDistances);
+                        max = maxDistance(euclideanDistances);
                         distanceTimeEnd = std::chrono::steady_clock::now();
+
+                        ShapeDescriptor::free::array(original);
+                        ShapeDescriptor::free::array(comparison);
+                        ShapeDescriptor::free::array(originalGPU);
+                        ShapeDescriptor::free::array(comparisonGPU);
+                        ShapeDescriptor::free::array(euclideanDistances);
                         break;
                     }
                     default:
@@ -481,8 +559,8 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<0>(originalObject), std::get<0>(comparisonObject), metadata);
 
-                        freeDescriptorType(std::get<0>(originalObject));
-                        freeDescriptorType(std::get<0>(comparisonObject));
+                        ShapeDescriptor::free::array(std::get<0>(originalObject));
+                        ShapeDescriptor::free::array(std::get<0>(comparisonObject));
 
                         ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
                             transformed.at(0);
@@ -500,10 +578,21 @@ void multipleObjectsBenchmark(
                             originalObjectsData["results"][fileName]["vertexCount"] = original.length;
                         }
 
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> comparisonGPU = comparison.copyToGPU();
+
                         distanceTimeStart = std::chrono::steady_clock::now();
-                        // Hente alle distanser, og regne ut gjennomsnitt
-                        // sim = calculateSimilarity<ShapeDescriptor::RICIDescriptor>(original, comparison, d.first, freeArray);
+                        ShapeDescriptor::cpu::array<int> crdDistances = ShapeDescriptor::gpu::computeRICIElementWiseModifiedSquareSumDistances(originalGPU, comparisonGPU);
+                        standardDeviation = standardDeviationOfDistances(crdDistances, averageDistance);
+                        min = minDistance(crdDistances);
+                        max = maxDistance(crdDistances);
                         distanceTimeEnd = std::chrono::steady_clock::now();
+
+                        ShapeDescriptor::free::array(original);
+                        ShapeDescriptor::free::array(comparison);
+                        ShapeDescriptor::free::array(originalGPU);
+                        ShapeDescriptor::free::array(comparisonGPU);
+                        ShapeDescriptor::free::array(crdDistances);
                         break;
                     }
                     }
@@ -511,11 +600,13 @@ void multipleObjectsBenchmark(
                     std::chrono::duration<double> elapsedSecondsDistance = distanceTimeEnd - distanceTimeStart;
 
                     jsonOutput["results"][fileName][comparisonFolderName][a.second][category]["generationTime"] = elapsedSecondsDescriptorComparison.count();
-
-                    // Kan bli average distanse
-                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["similarity"] = (double)0.0;
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["averageDistance"] = averageDistance;
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["stdDeviation"] = standardDeviation;
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["min"] = min;
+                    jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["max"] = max;
                     jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["time"] = elapsedSecondsDistance.count();
                 }
+
                 ShapeDescriptor::free::mesh(meshOriginal);
                 ShapeDescriptor::free::mesh(meshComparison);
 
@@ -526,7 +617,7 @@ void multipleObjectsBenchmark(
 
                 jsonOutput["runTime"] = currentTotalRunTime.count();
 
-                std::string outputFilePath = outputDirectory + "-" + comparisonFolderName + "/" + comparisonFolderName + ".json";
+                std::string outputFilePath = outputDirectory + "/" + comparisonFolderName + ".json";
                 std::ofstream outFile(outputFilePath);
                 outFile << jsonOutput.dump(4);
                 outFile.close();
@@ -571,7 +662,7 @@ int main(int argc, const char **argv)
         return 0;
     }
 
-    float supportRadius = 1.5f;
+    float supportRadius = 2.5f;
     float supportAngleDegrees = 60.0f;
     float pointDensityRadius = 0.2f;
     float minSupportRadius = 0.1f;

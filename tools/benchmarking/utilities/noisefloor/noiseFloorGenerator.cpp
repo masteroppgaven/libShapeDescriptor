@@ -127,6 +127,9 @@ json Benchmarking::utilities::noisefloor::generateNoiseFloor(
             Benchmarking::utilities::descriptor::generateRICIDescriptor(meshTwo, hardware, supportRadius, elapsedSecondsDescriptorTwo);
 
         output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo);
+
+        ShapeDescriptor::free::array(descriptorsOne);
+        ShapeDescriptor::free::array(descriptorsTwo);
         break;
     }
     case 1:
@@ -140,6 +143,9 @@ json Benchmarking::utilities::noisefloor::generateNoiseFloor(
             Benchmarking::utilities::descriptor::generateQUICCIDescriptor(meshTwo, hardware, supportRadius, elapsedSecondsDescriptorTwo);
 
         output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo);
+
+        ShapeDescriptor::free::array(descriptorsOne);
+        ShapeDescriptor::free::array(descriptorsTwo);
         break;
     }
     case 2:
@@ -155,6 +161,9 @@ json Benchmarking::utilities::noisefloor::generateNoiseFloor(
                 meshTwo, hardware, supportRadius, supportAngleDegrees, pointCloudSampleCount, randomSeed, elapsedSecondsDescriptorTwo);
 
         output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo);
+
+        ShapeDescriptor::free::array(descriptorsOne);
+        ShapeDescriptor::free::array(descriptorsTwo);
         break;
     }
     case 3:
@@ -170,6 +179,9 @@ json Benchmarking::utilities::noisefloor::generateNoiseFloor(
                 meshTwo, hardware, pointCloudSampleCount, randomSeed, pointDensityRadius, minSupportRadius, maxSupportRadius, elapsedSecondsDescriptorTwo);
 
         output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo, pointCloudSampleCount, pointCloudSampleCount);
+
+        ShapeDescriptor::free::array(descriptorsOne);
+        ShapeDescriptor::free::array(descriptorsTwo);
         break;
     }
     case 4:
@@ -185,6 +197,9 @@ json Benchmarking::utilities::noisefloor::generateNoiseFloor(
                 meshTwo, hardware, supportRadius, pointCloudSampleCount, randomSeed, elapsedSecondsDescriptorTwo);
 
         output["noiseFloors"] = getDescriptorDistances(descriptorsOne, descriptorsTwo);
+
+        ShapeDescriptor::free::array(descriptorsOne);
+        ShapeDescriptor::free::array(descriptorsTwo);
         break;
     }
     default:
