@@ -103,7 +103,7 @@ T maxDistance(ShapeDescriptor::cpu::array<T> distances)
 template <typename T>
 float standardDeviationOfDistances(ShapeDescriptor::cpu::array<T> distances, float average)
 {
-    float sum = 0;
+    T sum = 0;
 
     for (int i = 0; i < distances.length; i++)
     {
@@ -116,7 +116,7 @@ float standardDeviationOfDistances(ShapeDescriptor::cpu::array<T> distances, flo
 template <typename T>
 float calculateAverageDistance(ShapeDescriptor::cpu::array<T> distances)
 {
-    float simSum = 0;
+    T simSum = 0;
 
     for (int i = 0; i < distances.length; i++)
     {
