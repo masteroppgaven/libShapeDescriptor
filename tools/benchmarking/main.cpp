@@ -39,8 +39,6 @@
 
 using json = nlohmann::json;
 
-json originalObjectsData;
-
 using descriptorType = std::variant<
     ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>,
     ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor>,
@@ -319,8 +317,6 @@ void multipleObjectsBenchmark(
                     continue;
                 }
 
-                jsonOutput["results"][fileName][comparisonFolderName]["vertexCounts"][category]["vertexCount"] = meshComparison.vertexCount;
-
                 for (auto a : descriptorAlgorithms)
                 {
                     std::chrono::duration<double> elapsedSecondsDescriptorComparison;
@@ -359,9 +355,6 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<0>(originalObject), std::get<0>(comparisonObject), metadata);
 
-                        ShapeDescriptor::free::array(std::get<0>(originalObject));
-                        ShapeDescriptor::free::array(std::get<0>(comparisonObject));
-
                         ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
                             transformed.at(0);
 
@@ -370,13 +363,11 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Clutter Resistant Distance";
 
-                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                        {
-                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                            // The length of the descriptor is the exact number of verticies
-                            // While the vertex count in the mesh class is just faces * 3, which is can sometimes be not accurate
-                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                        }
+                        // Can take vertex count of the meshes / 3 for faces, since the vertex count is calculated from face count * 3
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> comparisonGPU = comparison.copyToGPU();
@@ -389,6 +380,8 @@ void multipleObjectsBenchmark(
                         min = minDistance(crdDistances);
                         max = maxDistance(crdDistances);
 
+                        ShapeDescriptor::free::array(std::get<0>(originalObject));
+                        ShapeDescriptor::free::array(std::get<0>(comparisonObject));
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
                         ShapeDescriptor::free::array(originalGPU);
@@ -401,9 +394,6 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<1>(originalObject), std::get<1>(comparisonObject), metadata);
 
-                        ShapeDescriptor::free::array(std::get<1>(originalObject));
-                        ShapeDescriptor::free::array(std::get<1>(comparisonObject));
-
                         ShapeDescriptor::cpu::array<ShapeDescriptor::QUICCIDescriptor> original =
                             transformed.at(0);
 
@@ -412,11 +402,10 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Weighted Hamming Distance";
 
-                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                        {
-                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                        }
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::QUICCIDescriptor> originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::QUICCIDescriptor> comparisonGPU = comparison.copyToGPU();
@@ -429,6 +418,8 @@ void multipleObjectsBenchmark(
                         min = minDistance(weightedHammingDistances);
                         max = maxDistance(weightedHammingDistances);
 
+                        ShapeDescriptor::free::array(std::get<1>(originalObject));
+                        ShapeDescriptor::free::array(std::get<1>(comparisonObject));
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
                         ShapeDescriptor::free::array(originalGPU);
@@ -441,9 +432,6 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<2>(originalObject), std::get<2>(comparisonObject), metadata);
 
-                        ShapeDescriptor::free::array(std::get<2>(originalObject));
-                        ShapeDescriptor::free::array(std::get<2>(comparisonObject));
-
                         ShapeDescriptor::cpu::array<ShapeDescriptor::SpinImageDescriptor> original =
                             transformed.at(0);
 
@@ -452,11 +440,10 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Pearson Correlation Coeffecient";
 
-                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                        {
-                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                        }
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> comparisonGPU = comparison.copyToGPU();
@@ -469,6 +456,8 @@ void multipleObjectsBenchmark(
                         min = minDistance(pearsonCorrelations);
                         max = maxDistance(pearsonCorrelations);
 
+                        ShapeDescriptor::free::array(std::get<2>(originalObject));
+                        ShapeDescriptor::free::array(std::get<2>(comparisonObject));
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
                         ShapeDescriptor::free::array(originalGPU);
@@ -481,9 +470,6 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<3>(originalObject), std::get<3>(comparisonObject), metadata);
 
-                        ShapeDescriptor::free::array(std::get<3>(originalObject));
-                        ShapeDescriptor::free::array(std::get<3>(comparisonObject));
-
                         ShapeDescriptor::cpu::array<ShapeDescriptor::ShapeContextDescriptor> original =
                             transformed.at(0);
 
@@ -492,11 +478,10 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Euclidean Distance";
 
-                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                        {
-                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                        }
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::ShapeContextDescriptor> originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::ShapeContextDescriptor> comparisonGPU = comparison.copyToGPU();
@@ -509,6 +494,8 @@ void multipleObjectsBenchmark(
                         min = minDistance(squaredDistances);
                         max = maxDistance(squaredDistances);
 
+                        ShapeDescriptor::free::array(std::get<3>(originalObject));
+                        ShapeDescriptor::free::array(std::get<3>(comparisonObject));
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
                         ShapeDescriptor::free::array(originalGPU);
@@ -521,9 +508,6 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<4>(originalObject), std::get<4>(comparisonObject), metadata);
 
-                        ShapeDescriptor::free::array(std::get<4>(originalObject));
-                        ShapeDescriptor::free::array(std::get<4>(comparisonObject));
-
                         ShapeDescriptor::cpu::array<ShapeDescriptor::FPFHDescriptor> original =
                             transformed.at(0);
 
@@ -532,11 +516,10 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Euclidean Distance";
 
-                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                        {
-                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                        }
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::FPFHDescriptor> originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::FPFHDescriptor> comparisonGPU = comparison.copyToGPU();
@@ -549,6 +532,8 @@ void multipleObjectsBenchmark(
                         min = minDistance(euclideanDistances);
                         max = maxDistance(euclideanDistances);
 
+                        ShapeDescriptor::free::array(std::get<4>(originalObject));
+                        ShapeDescriptor::free::array(std::get<4>(comparisonObject));
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
                         ShapeDescriptor::free::array(originalGPU);
@@ -561,9 +546,6 @@ void multipleObjectsBenchmark(
                         std::vector<ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor>> transformed =
                             Benchmarking::utilities::metadata::transformDescriptorsToMatchMetadata(std::get<0>(originalObject), std::get<0>(comparisonObject), metadata);
 
-                        ShapeDescriptor::free::array(std::get<0>(originalObject));
-                        ShapeDescriptor::free::array(std::get<0>(comparisonObject));
-
                         ShapeDescriptor::cpu::array<ShapeDescriptor::RICIDescriptor> original =
                             transformed.at(0);
 
@@ -572,15 +554,13 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Clutter Resistant Distance";
 
-                        if (originalObjectsData["results"].find(fileName) == originalObjectsData["results"].end())
-                        {
-                            originalObjectsData["results"][fileName][a.second]["generationTime"] = elapsedSecondsDescriptorOriginal.count();
-                            // The length of the descriptor is the exact number of verticies
-                            // While the vertex count in the mesh class is just faces * 3, which is can sometimes be not accurate
-                            originalObjectsData["results"][fileName]["vertexCount"] = original.length;
-                        }
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
-                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor>
+                            originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> comparisonGPU = comparison.copyToGPU();
 
                         distanceTimeStart = std::chrono::steady_clock::now();
@@ -591,6 +571,8 @@ void multipleObjectsBenchmark(
                         min = minDistance(crdDistances);
                         max = maxDistance(crdDistances);
 
+                        ShapeDescriptor::free::array(std::get<0>(originalObject));
+                        ShapeDescriptor::free::array(std::get<0>(comparisonObject));
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
                         ShapeDescriptor::free::array(originalGPU);
@@ -786,14 +768,6 @@ int main(int argc, const char **argv)
             maxSupportRadius,
             pointCloudSampleCount,
             randomSeed);
-
-        std::string originalObjectsDataPath = outputPath.value() + "/" + getRunDate() + "-" + originalsFolderName.value() + "/" + originalsFolderName.value() + ".json";
-
-        std::cout << "Writing original objects data to " << originalObjectsDataPath << std::endl;
-
-        std::ofstream outFile(originalObjectsDataPath);
-        outFile << originalObjectsData.dump(4);
-        outFile.close();
     }
     else
     {
