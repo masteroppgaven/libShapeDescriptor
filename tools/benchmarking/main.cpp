@@ -402,9 +402,9 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Weighted Hamming Distance";
 
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<1>(originalObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<1>(comparisonObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::QUICCIDescriptor> originalGPU = original.copyToGPU();
@@ -440,9 +440,9 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Pearson Correlation Coeffecient";
 
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<2>(originalObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<2>(comparisonObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::SpinImageDescriptor> originalGPU = original.copyToGPU();
@@ -478,9 +478,9 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Euclidean Distance";
 
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<3>(originalObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<3>(comparisonObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::ShapeContextDescriptor> originalGPU = original.copyToGPU();
@@ -516,9 +516,9 @@ void multipleObjectsBenchmark(
 
                         distanceFunction = "Euclidean Distance";
 
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<0>(originalObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalVertexCount"] = std::get<4>(originalObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["originalFaceCount"] = (int)meshOriginal.vertexCount / 3;
-                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
+                        jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<4>(comparisonObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
                         ShapeDescriptor::gpu::array<ShapeDescriptor::FPFHDescriptor> originalGPU = original.copyToGPU();
