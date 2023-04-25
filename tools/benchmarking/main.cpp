@@ -383,11 +383,11 @@ void multipleObjectsBenchmark(
 
                         distanceTimeStart = std::chrono::steady_clock::now();
                         ShapeDescriptor::cpu::array<int> crdDistances = ShapeDescriptor::gpu::computeRICIElementWiseModifiedSquareSumDistances(originalGPU, comparisonGPU);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         averageDistance = calculateAverageDistance(crdDistances);
                         standardDeviation = standardDeviationOfDistances(crdDistances, averageDistance);
                         min = minDistance(crdDistances);
                         max = maxDistance(crdDistances);
-                        distanceTimeEnd = std::chrono::steady_clock::now();
 
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
@@ -423,11 +423,11 @@ void multipleObjectsBenchmark(
 
                         distanceTimeStart = std::chrono::steady_clock::now();
                         ShapeDescriptor::cpu::array<float> weightedHammingDistances = ShapeDescriptor::gpu::computeQUICCIElementWiseWeightedHammingDistances(originalGPU, comparisonGPU);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         averageDistance = calculateAverageDistance(weightedHammingDistances);
                         standardDeviation = standardDeviationOfDistances(weightedHammingDistances, averageDistance);
                         min = minDistance(weightedHammingDistances);
                         max = maxDistance(weightedHammingDistances);
-                        distanceTimeEnd = std::chrono::steady_clock::now();
 
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
@@ -463,11 +463,11 @@ void multipleObjectsBenchmark(
 
                         distanceTimeStart = std::chrono::steady_clock::now();
                         ShapeDescriptor::cpu::array<float> pearsonCorrelations = ShapeDescriptor::gpu::computeSIElementWisePearsonCorrelations(originalGPU, comparisonGPU);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         averageDistance = calculateAverageDistance(pearsonCorrelations);
                         standardDeviation = standardDeviationOfDistances(pearsonCorrelations, averageDistance);
                         min = minDistance(pearsonCorrelations);
                         max = maxDistance(pearsonCorrelations);
-                        distanceTimeEnd = std::chrono::steady_clock::now();
 
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
@@ -503,11 +503,11 @@ void multipleObjectsBenchmark(
 
                         distanceTimeStart = std::chrono::steady_clock::now();
                         ShapeDescriptor::cpu::array<float> squaredDistances = ShapeDescriptor::gpu::compute3DSCElementWiseSquaredDistances(originalGPU, pointCloudSampleCount, comparisonGPU, pointCloudSampleCount);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         averageDistance = calculateAverageDistance(squaredDistances);
                         standardDeviation = standardDeviationOfDistances(squaredDistances, averageDistance);
                         min = minDistance(squaredDistances);
                         max = maxDistance(squaredDistances);
-                        distanceTimeEnd = std::chrono::steady_clock::now();
 
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
@@ -543,11 +543,11 @@ void multipleObjectsBenchmark(
 
                         distanceTimeStart = std::chrono::steady_clock::now();
                         ShapeDescriptor::cpu::array<float> euclideanDistances = ShapeDescriptor::gpu::computeFPFHElementWiseEuclideanDistances(originalGPU, comparisonGPU);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         averageDistance = calculateAverageDistance(euclideanDistances);
                         standardDeviation = standardDeviationOfDistances(euclideanDistances, averageDistance);
                         min = minDistance(euclideanDistances);
                         max = maxDistance(euclideanDistances);
-                        distanceTimeEnd = std::chrono::steady_clock::now();
 
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
@@ -585,11 +585,11 @@ void multipleObjectsBenchmark(
 
                         distanceTimeStart = std::chrono::steady_clock::now();
                         ShapeDescriptor::cpu::array<int> crdDistances = ShapeDescriptor::gpu::computeRICIElementWiseModifiedSquareSumDistances(originalGPU, comparisonGPU);
+                        distanceTimeEnd = std::chrono::steady_clock::now();
                         averageDistance = calculateAverageDistance(crdDistances);
                         standardDeviation = standardDeviationOfDistances(crdDistances, averageDistance);
                         min = minDistance(crdDistances);
                         max = maxDistance(crdDistances);
-                        distanceTimeEnd = std::chrono::steady_clock::now();
 
                         ShapeDescriptor::free::array(original);
                         ShapeDescriptor::free::array(comparison);
