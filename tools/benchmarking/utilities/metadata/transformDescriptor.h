@@ -47,7 +47,7 @@ namespace Benchmarking
                         continue;
                     }
 
-                    if (comparsisonIndex > descriptorComparison.length)
+                    if (comparsisonIndex >= descriptorComparison.length || descriptorIndex >= descriptorOriginal.length)
                         break;
 
                     transformedOriginalDescriptor.content[metadataIndex] = descriptorOriginal.content[descriptorIndex];

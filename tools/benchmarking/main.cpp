@@ -559,8 +559,7 @@ void multipleObjectsBenchmark(
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonVertexCount"] = std::get<0>(comparisonObject).length;
                         jsonOutput["results"][fileName][comparisonFolderName][a.second][category][distanceFunction]["objectData"]["comparisonFaceCount"] = (int)meshComparison.vertexCount / 3;
 
-                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor>
-                            originalGPU = original.copyToGPU();
+                        ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> originalGPU = original.copyToGPU();
                         ShapeDescriptor::gpu::array<ShapeDescriptor::RICIDescriptor> comparisonGPU = comparison.copyToGPU();
 
                         distanceTimeStart = std::chrono::steady_clock::now();
