@@ -102,13 +102,17 @@ template <typename T>
 float standardDeviationOfDistances(ShapeDescriptor::cpu::array<T> distances, float average)
 {
     float sum = 0;
+    int length = distances.length;
 
     for (int i = 0; i < distances.length; i++)
     {
-        sum += pow(((float)distances[i]) - average, 2);
+        if (!isnan((float)distances[i]))
+            sum += pow(((float)distances[i]) - average, 2);
+        else
+            length--;
     }
 
-    return sqrt(sum / (float)distances.length);
+    return sqrt(sum / length);
 }
 
 template <typename T>
