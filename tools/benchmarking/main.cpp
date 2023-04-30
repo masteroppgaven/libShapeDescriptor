@@ -115,13 +115,19 @@ template <typename T>
 float calculateAverageDistance(ShapeDescriptor::cpu::array<T> distances)
 {
     float simSum = 0;
+    int length = distances.length;
 
+    // We don't want NULL lengths to affect the data.
+    // Can't set a default value either, since it would skew the average.
     for (int i = 0; i < distances.length; i++)
     {
-        simSum += (float)distances[i];
+        if (!isnan((float)distances[i]))
+            simSum += (float)distances[i];
+        else
+            length--;
     }
 
-    float avgSim = simSum / (float)distances.length;
+    float avgSim = simSum / length;
 
     return avgSim;
 }
